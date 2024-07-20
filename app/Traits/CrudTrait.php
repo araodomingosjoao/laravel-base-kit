@@ -9,9 +9,6 @@ use App\Helpers\ApiResponse;
 trait CrudTrait
 {
     protected $repository;
-    protected $storeValidationRules = [];
-    protected $updateValidationRules = [];
-    protected $resource;
 
     public function create(Request $request)
     {

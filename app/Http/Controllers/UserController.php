@@ -14,12 +14,29 @@ class UserController extends Controller
     protected $storeValidationRules = [
         'name' => 'required|string|max:255',
         'email' => 'required|email|unique:users,email',
-        'password' => 'required|string|min:8',
+        'password' => [
+            'required',
+            'string',
+            'min:6',            
+            'regex:/[a-z]/',    
+            'regex:/[A-Z]/',    
+            'regex:/[0-9]/',    
+            'regex:/[@$!%*#?&]/'
+        ],
     ];
     protected $updateValidationRules = [
         'name' => 'sometimes|required|string|max:255',
-        'email' => 'sometimes|required|email|unique:users,email',
-        'password' => 'sometimes|required|string|min:8',
+        'email' => 'sometimes|required|email',
+        'password' => [
+            'sometimes',
+            'string',
+            'min:6',            
+            'regex:/[a-z]/',    
+            'regex:/[A-Z]/',    
+            'regex:/[0-9]/',    
+            'regex:/[@$!%*#?&]/'
+        ],
+    ];
 
     protected $uniqueFields = [
         'email' => 'users'

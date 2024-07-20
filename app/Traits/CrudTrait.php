@@ -17,14 +17,14 @@ trait CrudTrait
         $data = $request->all();
         $record = $this->repository->create($data);
 
-        return $this->successResponse($record, 'Record created successfully', 201);
+        return ApiResponse::success(new $this->resource($record), 'Record created successfully', 201);
     }
 
     public function read($id)
     {
         $record = $this->repository->find($id);
         if ($record) {
-            return $this->successResponse($record);
+            return ApiResponse::success(new $this->resource($record));
         }
         return ApiResponse::error('Record not found', 404);
     }
@@ -37,7 +37,7 @@ trait CrudTrait
         $data = $request->all();
         $success = $this->repository->update($id, $data);
         if ($success) {
-            return $this->successResponse($success, 'Record updated successfully');
+            return ApiResponse::success(new $this->resource($success), 'Record updated successfully');
         }
         return ApiResponse::error('Record not found', 404);
     }
@@ -61,7 +61,17 @@ trait CrudTrait
 
         $results = $this->repository->paginateWithFiltersAndSort($filters, $search, $perPage, $sortColumn, $sortDirection);
 
-        return $this->successResponse($results);
+        return ApiResponse::success([
+            'data' => $this->resource::collection($results->items()),
+            'meta' => [
+                'current_page' => $results->currentPage(),
+                'total' => $results->total(),
+                'per_page' => $results->perPage(),
+                'last_page' => $results->lastPage(),
+                'next_page_url' => $results->nextPageUrl(),
+                'prev_page_url' => $results->previousPageUrl(),
+            ],
+        ]);
     }
 
     protected function applyUniqueValidationRules($id)
@@ -78,17 +88,5 @@ trait CrudTrait
         if ($validator->fails()) {
             ApiResponse::error($validator->errors(), 422)->throwResponse();
         }
-    }
-
-    protected function successResponse($data, $message = 'Operation successful', $code = 200)
-    {
-        if ($this->resource) {
-            if ($data instanceof \Illuminate\Database\Eloquent\Collection || $data instanceof \Illuminate\Pagination\LengthAwarePaginator) {
-                $data = $this->resource::collection($data);
-            } else {
-                $data = new $this->resource($data);
-            }
-        }
-        return ApiResponse::success($data, $message, $code);
     }
 }

@@ -2,6 +2,10 @@
 
 namespace App\Repositories;
 
+use App\Events\AfterCreate;
+use App\Events\AfterUpdate;
+use App\Events\BeforeCreate;
+use App\Events\BeforeUpdate;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
@@ -31,7 +35,10 @@ class BaseRepository
      */
     public function create(array $data): Model
     {
-        return $this->model->create($data);
+        event(new BeforeCreate($data, $this->model));
+        $model = $this->model->create($data);
+        event(new AfterCreate($model));
+        return $model;
     }
 
     /**
@@ -50,13 +57,18 @@ class BaseRepository
      *
      * @param int $id
      * @param array $data
-     * @return bool
+     * @return Model|bool
      */
-    public function update(int $id, array $data): bool
+    public function update(int $id, array $data): Model|bool
     {
         $record = $this->model->find($id);
         if ($record) {
-            return $record->update($data);
+            event(new BeforeUpdate($data, $record));
+            $updated = $record->update($data);
+            if ($updated) {
+                event(new AfterUpdate($record));
+                return $record;
+            }
         }
         return false;
     }

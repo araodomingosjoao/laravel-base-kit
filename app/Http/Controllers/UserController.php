@@ -20,6 +20,9 @@ class UserController extends Controller
         'name' => 'sometimes|required|string|max:255',
         'email' => 'sometimes|required|email|unique:users,email',
         'password' => 'sometimes|required|string|min:8',
+
+    protected $uniqueFields = [
+        'email' => 'users'
     ];
 
     protected $resource = UserResource::class;

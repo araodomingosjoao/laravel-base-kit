@@ -34,6 +34,7 @@ trait CrudTrait
 
     public function update(Request $request, $id)
     {
+        $this->applyUniqueValidationRules($id);
         $this->validateRequest($request, $this->updateValidationRules);
 
         $data = $request->all();
@@ -64,6 +65,13 @@ trait CrudTrait
         $results = $this->repository->paginateWithFiltersAndSort($filters, $search, $perPage, $sortColumn, $sortDirection);
 
         return $this->successResponse($results);
+    }
+
+    protected function applyUniqueValidationRules($id)
+    {
+        foreach ($this->uniqueFields as $field => $table) {
+            $this->updateValidationRules[$field] = $this->updateValidationRules[$field] . '|unique:' . $table . ',' . $field . ',' . $id;
+        }
     }
 
     protected function validateRequest(Request $request, array $rules)

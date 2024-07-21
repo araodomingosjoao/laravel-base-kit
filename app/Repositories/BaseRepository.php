@@ -36,10 +36,14 @@ class BaseRepository
      */
     public function create(array $data): Model
     {
-        event(new BeforeCreate($data, $this->model));
-        $model = $this->model->create($data);
-        event(new AfterCreate($model));
-        return $model;
+        try {
+            event(new BeforeCreate($data, $this->model));
+            $model = $this->model->create($data);
+            event(new AfterCreate($model));
+            return $model;
+        } catch (\Exception $e) {
+            throw new \Exception('Error creating record: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -64,11 +68,15 @@ class BaseRepository
     {
         $record = $this->model->find($id);
         if ($record) {
-            event(new BeforeUpdate($data, $record));
-            $updated = $record->update($data);
-            if ($updated) {
-                event(new AfterUpdate($record));
-                return $record;
+            try {
+                event(new BeforeUpdate($data, $record));
+                $updated = $record->update($data);
+                if ($updated) {
+                    event(new AfterUpdate($record));
+                    return $record;
+                }
+            } catch (\Exception $e) {
+                throw new \Exception('Error updating record: ' . $e->getMessage());
             }
         }
         return false;
@@ -84,7 +92,11 @@ class BaseRepository
     {
         $record = $this->model->find($id);
         if ($record) {
-            return $record->delete();
+            try {
+                return $record->delete();
+            } catch (\Exception $e) {
+                throw new \Exception('Error deleting record: ' . $e->getMessage());
+            }
         }
         return false;
     }
@@ -101,7 +113,7 @@ class BaseRepository
      */
     public function paginateWithFiltersAndSort($filters = [], $search = '', $perPage = 15, $sortColumn = 'id', $sortDirection = 'asc'): LengthAwarePaginator
     {
-        $query = $this->model->query();
+        $query = $this->model->newQuery();
 
         foreach ($filters as $key => $value) {
             if ($value) {
@@ -129,6 +141,8 @@ class BaseRepository
             });
         }
 
-        return $query->with($this->relationships)->orderBy($sortColumn, $sortDirection)->paginate($perPage);
+        return $query->with($this->relationships)
+                ->orderBy($sortColumn, $sortDirection)
+                ->paginate($perPage);
     }
 }

@@ -14,10 +14,13 @@ trait CrudTrait
     {
         $this->validateRequest($request, $this->storeValidationRules);
 
-        $data = $request->all();
-        $record = $this->repository->create($data);
-
-        return ApiResponse::success(new $this->resource($record), 'Record created successfully', 201);
+        try {
+            $data = $request->all();
+            $record = $this->repository->create($data);
+            return ApiResponse::success(new $this->resource($record), 'Record created successfully', 201);
+        } catch (\Exception $e) {
+            return ApiResponse::error('Error creating record: ' . $e->getMessage(), 500);
+        }
     }
 
     public function read($id)
@@ -34,21 +37,29 @@ trait CrudTrait
         $this->applyUniqueValidationRules($id);
         $this->validateRequest($request, $this->updateValidationRules);
 
-        $data = $request->all();
-        $success = $this->repository->update($id, $data);
-        if ($success) {
-            return ApiResponse::success(new $this->resource($success), 'Record updated successfully');
+        try {
+            $data = $request->all();
+            $success = $this->repository->update($id, $data);
+            if ($success) {
+                return ApiResponse::success(new $this->resource($success), 'Record updated successfully');
+            }
+            return ApiResponse::error('Record not found', 404);
+        } catch (\Exception $e) {
+            return ApiResponse::error('Error updating record: ' . $e->getMessage(), 500);
         }
-        return ApiResponse::error('Record not found', 404);
     }
 
     public function delete($id)
     {
-        $success = $this->repository->delete($id);
-        if ($success) {
-            return ApiResponse::success(null, 'Record deleted successfully');
+        try {
+            $success = $this->repository->delete($id);
+            if ($success) {
+                return ApiResponse::success(null, 'Record deleted successfully');
+            }
+            return ApiResponse::error('Record not found', 404);
+        } catch (\Exception $e) {
+            return ApiResponse::error('Error deleting record: ' . $e->getMessage(), 500);
         }
-        return ApiResponse::error('Record not found', 404);
     }
 
     public function index(Request $request)
@@ -59,19 +70,23 @@ trait CrudTrait
         $sortColumn = $request->query('sort_column', 'id');
         $sortDirection = $request->query('sort_direction', 'asc');
 
-        $results = $this->repository->paginateWithFiltersAndSort($filters, $search, $perPage, $sortColumn, $sortDirection);
+        try {
+            $results = $this->repository->paginateWithFiltersAndSort($filters, $search, $perPage, $sortColumn, $sortDirection);
 
-        return ApiResponse::success([
-            'data' => $this->resource::collection($results->items()),
-            'meta' => [
-                'current_page' => $results->currentPage(),
-                'total' => $results->total(),
-                'per_page' => $results->perPage(),
-                'last_page' => $results->lastPage(),
-                'next_page_url' => $results->nextPageUrl(),
-                'prev_page_url' => $results->previousPageUrl(),
-            ],
-        ]);
+            return ApiResponse::success([
+                'data' => $this->resource::collection($results->items()),
+                'meta' => [
+                    'current_page' => $results->currentPage(),
+                    'total' => $results->total(),
+                    'per_page' => $results->perPage(),
+                    'last_page' => $results->lastPage(),
+                    'next_page_url' => $results->nextPageUrl(),
+                    'prev_page_url' => $results->previousPageUrl(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return ApiResponse::error('Error fetching records: ' . $e->getMessage(), 500);
+        }
     }
 
     protected function applyUniqueValidationRules($id)

@@ -9,48 +9,57 @@ use App\Helpers\ApiResponse;
 trait CrudTrait
 {
     protected $repository;
-    protected $storeValidationRules = [];
-    protected $updateValidationRules = [];
-    protected $resource;
 
     public function create(Request $request)
     {
         $this->validateRequest($request, $this->storeValidationRules);
 
-        $data = $request->all();
-        $record = $this->repository->create($data);
-
-        return $this->successResponse($record, 'Record created successfully', 201);
+        try {
+            $data = $request->all();
+            $record = $this->repository->create($data);
+            return ApiResponse::success(new $this->resource($record), 'Record created successfully', 201);
+        } catch (\Exception $e) {
+            return ApiResponse::error('Error creating record: ' . $e->getMessage(), 500);
+        }
     }
 
     public function read($id)
     {
         $record = $this->repository->find($id);
         if ($record) {
-            return $this->successResponse($record);
+            return ApiResponse::success(new $this->resource($record));
         }
         return ApiResponse::error('Record not found', 404);
     }
 
     public function update(Request $request, $id)
     {
+        $this->applyUniqueValidationRules($id);
         $this->validateRequest($request, $this->updateValidationRules);
 
-        $data = $request->all();
-        $success = $this->repository->update($id, $data);
-        if ($success) {
-            return $this->successResponse($success, 'Record updated successfully');
+        try {
+            $data = $request->all();
+            $success = $this->repository->update($id, $data);
+            if ($success) {
+                return ApiResponse::success(new $this->resource($success), 'Record updated successfully');
+            }
+            return ApiResponse::error('Record not found', 404);
+        } catch (\Exception $e) {
+            return ApiResponse::error('Error updating record: ' . $e->getMessage(), 500);
         }
-        return ApiResponse::error('Record not found', 404);
     }
 
     public function delete($id)
     {
-        $success = $this->repository->delete($id);
-        if ($success) {
-            return ApiResponse::success(null, 'Record deleted successfully');
+        try {
+            $success = $this->repository->delete($id);
+            if ($success) {
+                return ApiResponse::success(null, 'Record deleted successfully');
+            }
+            return ApiResponse::error('Record not found', 404);
+        } catch (\Exception $e) {
+            return ApiResponse::error('Error deleting record: ' . $e->getMessage(), 500);
         }
-        return ApiResponse::error('Record not found', 404);
     }
 
     public function index(Request $request)
@@ -61,9 +70,30 @@ trait CrudTrait
         $sortColumn = $request->query('sort_column', 'id');
         $sortDirection = $request->query('sort_direction', 'asc');
 
-        $results = $this->repository->paginateWithFiltersAndSort($filters, $search, $perPage, $sortColumn, $sortDirection);
+        try {
+            $results = $this->repository->paginateWithFiltersAndSort($filters, $search, $perPage, $sortColumn, $sortDirection);
 
-        return $this->successResponse($results);
+            return ApiResponse::success([
+                'data' => $this->resource::collection($results->items()),
+                'meta' => [
+                    'current_page' => $results->currentPage(),
+                    'total' => $results->total(),
+                    'per_page' => $results->perPage(),
+                    'last_page' => $results->lastPage(),
+                    'next_page_url' => $results->nextPageUrl(),
+                    'prev_page_url' => $results->previousPageUrl(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return ApiResponse::error('Error fetching records: ' . $e->getMessage(), 500);
+        }
+    }
+
+    protected function applyUniqueValidationRules($id)
+    {
+        foreach ($this->uniqueFields as $field => $table) {
+            $this->updateValidationRules[$field] = $this->updateValidationRules[$field] . '|unique:' . $table . ',' . $field . ',' . $id;
+        }
     }
 
     protected function validateRequest(Request $request, array $rules)
@@ -73,17 +103,5 @@ trait CrudTrait
         if ($validator->fails()) {
             ApiResponse::error($validator->errors(), 422)->throwResponse();
         }
-    }
-
-    protected function successResponse($data, $message = 'Operation successful', $code = 200)
-    {
-        if ($this->resource) {
-            if ($data instanceof \Illuminate\Database\Eloquent\Collection || $data instanceof \Illuminate\Pagination\LengthAwarePaginator) {
-                $data = $this->resource::collection($data);
-            } else {
-                $data = new $this->resource($data);
-            }
-        }
-        return ApiResponse::success($data, $message, $code);
     }
 }

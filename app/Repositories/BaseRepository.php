@@ -2,9 +2,14 @@
 
 namespace App\Repositories;
 
+use App\Events\AfterCreate;
+use App\Events\AfterUpdate;
+use App\Events\BeforeCreate;
+use App\Events\BeforeUpdate;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class BaseRepository
 {
@@ -31,7 +36,14 @@ class BaseRepository
      */
     public function create(array $data): Model
     {
-        return $this->model->create($data);
+        try {
+            event(new BeforeCreate($data, $this->model));
+            $model = $this->model->create($data);
+            event(new AfterCreate($model));
+            return $model;
+        } catch (\Exception $e) {
+            throw new \Exception('Error creating record: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -50,13 +62,22 @@ class BaseRepository
      *
      * @param int $id
      * @param array $data
-     * @return bool
+     * @return Model|bool
      */
-    public function update(int $id, array $data): bool
+    public function update(int $id, array $data): Model|bool
     {
         $record = $this->model->find($id);
         if ($record) {
-            return $record->update($data);
+            try {
+                event(new BeforeUpdate($data, $record));
+                $updated = $record->update($data);
+                if ($updated) {
+                    event(new AfterUpdate($record));
+                    return $record;
+                }
+            } catch (\Exception $e) {
+                throw new \Exception('Error updating record: ' . $e->getMessage());
+            }
         }
         return false;
     }
@@ -71,7 +92,11 @@ class BaseRepository
     {
         $record = $this->model->find($id);
         if ($record) {
-            return $record->delete();
+            try {
+                return $record->delete();
+            } catch (\Exception $e) {
+                throw new \Exception('Error deleting record: ' . $e->getMessage());
+            }
         }
         return false;
     }
@@ -86,9 +111,9 @@ class BaseRepository
      * @param string $sortDirection
      * @return \Illuminate\Pagination\LengthAwarePaginator
      */
-    public function paginateWithFiltersAndSort($filters = [], $search = '', $perPage = 15, $sortColumn = 'id', $sortDirection = 'asc')
+    public function paginateWithFiltersAndSort($filters = [], $search = '', $perPage = 15, $sortColumn = 'id', $sortDirection = 'asc'): LengthAwarePaginator
     {
-        $query = $this->model->query();
+        $query = $this->model->newQuery();
 
         foreach ($filters as $key => $value) {
             if ($value) {
@@ -116,16 +141,8 @@ class BaseRepository
             });
         }
 
-        $paginator = $query->with($this->relationships)->orderBy($sortColumn, $sortDirection)->paginate($perPage);
-
-        return [
-            'data' => $paginator->items(),
-            'current_page' => $paginator->currentPage(),
-            'total' => $paginator->total(),
-            'per_page' => $paginator->perPage(),
-            'last_page' => $paginator->lastPage(),
-            'next_page_url' => $paginator->nextPageUrl(),
-            'prev_page_url' => $paginator->previousPageUrl(),
-        ];
+        return $query->with($this->relationships)
+                ->orderBy($sortColumn, $sortDirection)
+                ->paginate($perPage);
     }
 }
